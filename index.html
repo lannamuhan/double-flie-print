@@ -3,669 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Office/PDF双面打印处理工具</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="https://unpkg.com/docxtemplater@3.37.12/build/docxtemplater.js"></script>
-    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.js"></script>
-    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip-utils.js"></script>
-    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>PDF双面打印拆分工具</title>
     <style>
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "微软雅黑", sans-serif;
         }
-        .animate-fade {
-            animation: fadeIn 0.3s ease forwards;
+        body {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #f5f5f5;
         }
-        .file-drop-area {
-            border: 2px dashed #9ca3af;
-            transition: all 0.3s ease;
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        .file-drop-area.active {
-            border-color: #3b82f6;
-            background-color: #eff6ff;
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 24px;
         }
-        .file-type-tags {
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-top: 8px;
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 6px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 30px;
+            transition: border-color 0.3s;
         }
-        .file-type-tag {
-            background-color: #e5e7eb;
-            color: #4b5563;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
+        .upload-area:hover {
+            border-color: #409eff;
+        }
+        .upload-area input {
+            display: none;
+        }
+        .upload-tip {
+            color: #666;
+            font-size: 16px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        .btn-odd {
+            background: #409eff;
+            color: white;
+        }
+        .btn-even {
+            background: #67c23a;
+            color: white;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .preview {
+            margin-top: 30px;
+            display: none;
+        }
+        .preview h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        .pdf-preview {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+        }
+        .tip {
+            text-align: center;
+            color: #999;
+            margin-top: 20px;
+            font-size: 14px;
         }
     </style>
+    <!-- 引入依赖库（CDN离线可用，无需联网） -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
-    <!-- 顶部导航 -->
-    <header class="bg-white shadow-sm py-4 px-6">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-800 flex items-center">
-                <i class="fas fa-file-alt text-blue-500 mr-3"></i>
-                文档双面打印处理工具
-            </h1>
-            <button id="helpBtn" class="text-gray-600 hover:text-blue-500 transition-colors">
-                <i class="fas fa-question-circle text-xl"></i>
-            </button>
+<body>
+    <div class="container">
+        <h1>PDF双面打印拆分工具</h1>
+        <!-- 上传PDF区域 -->
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="pdfFile" accept=".pdf" />
+            <div class="upload-tip">点击/拖拽上传PDF文件（自动按A4分页）</div>
         </div>
-    </header>
-
-    <!-- 主内容区 -->
-    <main class="flex-1 max-w-4xl w-full mx-auto p-6">
-        <!-- 上传区域 -->
-        <div id="uploadSection" class="animate-fade">
-            <div class="bg-white rounded-xl shadow-md p-8 mb-8">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">上传文档文件</h2>
-                <label for="fileInput" class="file-drop-area block w-full rounded-lg p-12 text-center cursor-pointer hover:bg-gray-50">
-                    <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" class="hidden">
-                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
-                    <p class="text-gray-600 mb-2">点击或拖拽文件到此处上传</p>
-                    <p class="text-gray-400 text-sm">支持PDF、Word、Excel格式，最大文件大小100MB</p>
-                    <div class="flex file-type-tags justify-center mt-4">
-                        <span class="file-type-tag">.pdf</span>
-                        <span class="file-type-tag">.doc</span>
-                        <span class="file-type-tag">.docx</span>
-                        <span class="file-type-tag">.xls</span>
-                        <span class="file-type-tag">.xlsx</span>
-                    </div>
-                </label>
-                <div id="fileInfo" class="mt-4 hidden">
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div class="flex items-center">
-                            <i id="fileIcon" class="fas fa-file-pdf text-red-500 mr-3"></i>
-                            <span id="fileName" class="text-gray-700 truncate max-w-xs"></span>
-                        </div>
-                        <span id="fileSize" class="text-gray-500 text-sm"></span>
-                    </div>
-                </div>
-            </div>
+        <!-- 操作按钮 -->
+        <div class="btn-group">
+            <button class="btn-odd" id="createOddPdf" disabled>生成【奇数页】PDF（1、3、5…）</button>
+            <button class="btn-even" id="createEvenPdf" disabled>生成【倒序偶数页】PDF（6、4、2…）</button>
         </div>
-
-        <!-- 处理中区域 -->
-        <div id="processingSection" class="hidden animate-fade">
-            <div class="bg-white rounded-xl shadow-md p-8 mb-8">
-                <h2 class="text-xl font-semibold text-gray-700 mb-6">正在处理文档</h2>
-                <div class="flex flex-col items-center">
-                    <div class="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                    <p id="processingText" class="text-gray-600">正在读取文件...</p>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-6">
-                        <div id="progressBar" class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
+        <!-- PDF预览 -->
+        <div class="preview" id="previewArea">
+            <h3>文件预览</h3>
+            <canvas class="pdf-preview" id="pdfPreview"></canvas>
         </div>
-
-        <!-- 结果区域 -->
-        <div id="resultSection" class="hidden animate-fade">
-            <div class="bg-white rounded-xl shadow-md p-8 mb-8">
-                <h2 class="text-xl font-semibold text-gray-700 mb-6">处理完成</h2>
-                <div class="mb-6">
-                    <p class="text-gray-600 mb-2">原始文件：<span id="originalFileInfo" class="font-semibold text-blue-500"></span></p>
-                    <p class="text-gray-600 mb-4">已转换为A4尺寸PDF（共 <span id="totalPages" class="font-semibold text-blue-500"></span> 页），并拆分为两份双面打印文件：</p>
-                    <div class="grid md:grid-cols-2 gap-4">
-                        <!-- 第一份文件 -->
-                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                            <div class="flex items-center mb-3">
-                                <i class="fas fa-file-pdf text-blue-500 mr-2"></i>
-                                <h3 class="font-medium text-gray-800">文件1（正面打印）</h3>
-                            </div>
-                            <p class="text-gray-600 text-sm mb-4" id="file1Desc"></p>
-                            <button id="downloadFile1" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center">
-                                <i class="fas fa-download mr-2"></i> 下载文件1
-                            </button>
-                        </div>
-                        <!-- 第二份文件 -->
-                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                            <div class="flex items-center mb-3">
-                                <i class="fas fa-file-pdf text-green-500 mr-2"></i>
-                                <h3 class="font-medium text-gray-800">文件2（反面打印）</h3>
-                            </div>
-                            <p class="text-gray-600 text-sm mb-4" id="file2Desc"></p>
-                            <button id="downloadFile2" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center">
-                                <i class="fas fa-download mr-2"></i> 下载文件2
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex justify-center">
-                    <button id="restartBtn" class="text-blue-500 hover:text-blue-700 transition-colors flex items-center">
-                        <i class="fas fa-redo mr-2"></i> 重新上传文件
-                    </button>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- 帮助模态框 -->
-    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">使用说明</h3>
-                <button id="closeHelpBtn" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-            <div class="text-gray-600 space-y-4">
-                <p>1. 上传支持的文档文件（PDF、Word、Excel）</p>
-                <p>2. 工具会自动完成：</p>
-                <ul class="list-disc pl-6 space-y-1">
-                    <li>将Office文件（doc/docx/xls/xlsx）转换为PDF格式</li>
-                    <li>自动调整为A4打印尺寸（210mm×297mm）</li>
-                    <li>拆分文件：文件1含所有奇数页，文件2含倒序偶数页+必要空白页</li>
-                </ul>
-                <p>3. 打印步骤：</p>
-                <ol class="list-decimal pl-6 space-y-1">
-                    <li>先打印文件1（正面）</li>
-                    <li>将打印好的纸张翻面（保持原有顺序）放回打印机</li>
-                    <li>打印文件2（反面）</li>
-                </ol>
-                <p class="text-yellow-600 flex items-center">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    注意：1. Office文件复杂格式可能存在轻微差异；2. 不同打印机进纸方向不同，建议先测试1-2页
-                </p>
-            </div>
-        </div>
+        <p class="tip">使用说明：生成两个PDF后，先打印奇数页PDF（正面），再将打印纸翻面放入打印机，打印倒序偶数页PDF（背面），实现完美双面打印</p>
     </div>
 
-    <!-- 页脚 -->
-    <footer class="bg-white border-t border-gray-200 py-4 px-6">
-        <div class="max-w-4xl mx-auto text-center text-gray-500 text-sm">
-            <p>所有文件处理均在本地完成，不会上传到服务器 | 保护您的隐私安全</p>
-        </div>
-    </footer>
-
     <script>
-        // 全局变量
-        const { PDFDocument, StandardFonts, rgb } = PDFLib;
-        let pdfDoc = null;
-        let originalFileName = '';
-        let originalFileExt = '';
+        // 初始化配置
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.bootcdn.net/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        const { jsPDF } = window.jspdf;
 
-        // DOM元素
-        const uploadSection = document.getElementById('uploadSection');
-        const processingSection = document.getElementById('processingSection');
-        const resultSection = document.getElementById('resultSection');
-        const fileInput = document.getElementById('fileInput');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const fileSize = document.getElementById('fileSize');
-        const fileIcon = document.getElementById('fileIcon');
-        const progressBar = document.getElementById('progressBar');
-        const processingText = document.getElementById('processingText');
-        const totalPages = document.getElementById('totalPages');
-        const originalFileInfo = document.getElementById('originalFileInfo');
-        const file1Desc = document.getElementById('file1Desc');
-        const file2Desc = document.getElementById('file2Desc');
-        const downloadFile1 = document.getElementById('downloadFile1');
-        const downloadFile2 = document.getElementById('downloadFile2');
-        const restartBtn = document.getElementById('restartBtn');
-        const helpBtn = document.getElementById('helpBtn');
-        const helpModal = document.getElementById('helpModal');
-        const closeHelpBtn = document.getElementById('closeHelpBtn');
-        const fileDropArea = document.querySelector('.file-drop-area');
+        // 获取DOM元素
+        const uploadArea = document.getElementById('uploadArea');
+        const pdfFile = document.getElementById('pdfFile');
+        const createOddPdf = document.getElementById('createOddPdf');
+        const createEvenPdf = document.getElementById('createEvenPdf');
+        const previewArea = document.getElementById('previewArea');
+        const pdfPreview = document.getElementById('pdfPreview');
 
-        // 初始化
-        function init() {
-            // 文件上传事件
-            fileInput.addEventListener('change', handleFileSelect);
-            
-            // 拖拽事件
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                fileDropArea.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            
-            ['dragenter', 'dragover'].forEach(eventName => {
-                fileDropArea.addEventListener(eventName, highlight, false);
-            });
-            
-            ['dragleave', 'drop'].forEach(eventName => {
-                fileDropArea.addEventListener(eventName, unhighlight, false);
-            });
-            
-            function highlight() {
-                fileDropArea.classList.add('active');
-            }
-            
-            function unhighlight() {
-                fileDropArea.classList.remove('active');
-            }
-            
-            fileDropArea.addEventListener('drop', handleDrop, false);
-            
-            function handleDrop(e) {
-                const dt = e.dataTransfer;
-                const file = dt.files[0];
-                if (file) {
-                    handleFile(file);
-                }
-            }
+        // 全局变量存储PDF数据
+        let pdfDoc = null; // PDF文档实例
+        let totalPages = 0; // 总页数
+        const pageDatas = []; // 存储每一页的Canvas数据
 
-            // 按钮事件
-            restartBtn.addEventListener('click', restart);
-            helpBtn.addEventListener('click', () => helpModal.classList.remove('hidden'));
-            closeHelpBtn.addEventListener('click', () => helpModal.classList.add('hidden'));
-            helpModal.addEventListener('click', (e) => {
-                if (e.target === helpModal) helpModal.classList.add('hidden');
-            });
-
-            // 下载按钮事件
-            downloadFile1.addEventListener('click', () => downloadFile(1));
-            downloadFile2.addEventListener('click', () => downloadFile(2));
-        }
-
-        // 处理文件选择
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
-            if (file) {
-                handleFile(file);
-            }
-        }
-
-        // 处理文件
-        function handleFile(file) {
-            // 获取文件信息
-            originalFileName = file.name;
-            originalFileExt = file.name.split('.').pop().toLowerCase();
-            fileName.textContent = originalFileName;
-            fileSize.textContent = formatFileSize(file.size);
-            originalFileInfo.textContent = `${originalFileName}（${formatFileSize(file.size)}）`;
-
-            // 设置文件图标
-            setFileIcon(originalFileExt);
-
-            // 显示文件信息
-            fileInfo.classList.remove('hidden');
-
-            // 开始处理
-            processFile(file);
-        }
-
-        // 设置文件图标
-        function setFileIcon(ext) {
-            switch(ext) {
-                case 'pdf':
-                    fileIcon.className = 'fas fa-file-pdf text-red-500 mr-3';
-                    break;
-                case 'doc':
-                case 'docx':
-                    fileIcon.className = 'fas fa-file-word text-blue-500 mr-3';
-                    break;
-                case 'xls':
-                case 'xlsx':
-                    fileIcon.className = 'fas fa-file-excel text-green-500 mr-3';
-                    break;
-                default:
-                    fileIcon.className = 'fas fa-file-alt text-gray-500 mr-3';
-            }
-        }
-
-        // 格式化文件大小
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / 1048576).toFixed(1) + ' MB';
-        }
-
-        // 处理文件（转换+拆分）
-        async function processFile(file) {
-            // 切换显示状态
-            uploadSection.classList.add('hidden');
-            processingSection.classList.remove('hidden');
-
-            try {
-                let pdfBytes;
-
-                // 根据文件类型处理
-                if (originalFileExt === 'pdf') {
-                    // PDF文件：直接读取
-                    processingText.textContent = '正在读取PDF文件...';
-                    pdfBytes = await readFileAsync(file);
-                    updateProgress(30);
-                } else if (originalFileExt === 'doc' || originalFileExt === 'docx') {
-                    // Word文件：转换为PDF
-                    processingText.textContent = '正在转换Word文件为PDF...';
-                    pdfBytes = await convertWordToPdf(file);
-                    updateProgress(40);
-                } else if (originalFileExt === 'xls' || originalFileExt === 'xlsx') {
-                    // Excel文件：转换为PDF
-                    processingText.textContent = '正在转换Excel文件为PDF...';
-                    pdfBytes = await convertExcelToPdf(file);
-                    updateProgress(40);
-                } else {
-                    throw new Error('不支持的文件格式');
-                }
-
-                // 加载PDF并调整为A4尺寸
-                processingText.textContent = '正在调整为A4尺寸...';
-                const tempPdfDoc = await PDFDocument.load(pdfBytes);
-                const a4PdfDoc = await adjustToA4Size(tempPdfDoc);
-                const a4PdfBytes = await a4PdfDoc.save();
-                updateProgress(50);
-
-                // 重新加载调整后的PDF
-                const finalPdfDoc = await PDFDocument.load(a4PdfBytes);
-                const pageCount = finalPdfDoc.getPageCount();
-                totalPages.textContent = pageCount;
-
-                // 拆分页面
-                processingText.textContent = '正在拆分页面...';
-                const oddPages = [];
-                const evenPages = [];
-
-                // 收集奇数页和偶数页
-                for (let i = 0; i < pageCount; i++) {
-                    const pageNum = i + 1;
-                    updateProgress(50 + (i + 1) / pageCount * 20); // 70%进度用于收集页面
-
-                    if (pageNum % 2 === 1) {
-                        oddPages.push(i); // 奇数页（原顺序）
-                    } else {
-                        evenPages.push(i); // 偶数页（后续倒序）
-                    }
-                }
-
-                // 处理第二份文件：偶数页倒序 + 必要时添加空白页
-                evenPages.reverse();
-                if (pageCount % 2 === 1) {
-                    evenPages.push(null); // null表示空白页
-                }
-
-                // 创建第一份PDF（奇数页）
-                processingText.textContent = '正在生成文件1...';
-                const pdf1 = await PDFDocument.create();
-                const pages1 = await pdf1.copyPages(finalPdfDoc, oddPages);
-                pages1.forEach(page => pdf1.addPage(page));
-                updateProgress(85); // 85%进度
-
-                // 创建第二份PDF（偶数页倒序 + 空白页）
-                processingText.textContent = '正在生成文件2...';
-                const pdf2 = await PDFDocument.create();
-                const helveticaFont = await pdf2.embedFont(StandardFonts.Helvetica);
-                
-                for (let i = 0; i < evenPages.length; i++) {
-                    const pageIndex = evenPages[i];
-                    if (pageIndex !== null) {
-                        const [page] = await pdf2.copyPages(finalPdfDoc, [pageIndex]);
-                        pdf2.addPage(page);
-                    } else {
-                        // 添加A4尺寸空白页
-                        const page = pdf2.addPage([595.28, 841.89]); // A4标准尺寸（点）
-                        page.drawText('空白页（双面打印用）', {
-                            x: 50,
-                            y: 750,
-                            font: helveticaFont,
-                            size: 12,
-                            color: rgb(0.5, 0.5, 0.5)
-                        });
-                    }
-                }
-                updateProgress(100); // 100%进度
-
-                // 准备下载
-                processingText.textContent = '处理完成！';
-                setTimeout(() => {
-                    // 更新结果信息
-                    file1Desc.textContent = `包含第 ${oddPages.map(i => i + 1).join('、')} 页（共 ${oddPages.length} 页）`;
-                    
-                    const file2Pages = evenPages.map(page => page !== null ? page + 1 : '空白页');
-                    file2Desc.textContent = `包含第 ${file2Pages.join('、')} 页（共 ${evenPages.length} 页）`;
-
-                    // 保存PDF数据
-                    const finalPdf1Bytes = await pdf1.save();
-                    const finalPdf2Bytes = await pdf2.save();
-
-                    // 存储到全局变量
-                    window.pdfData = {
-                        file1: finalPdf1Bytes,
-                        file2: finalPdf2Bytes
-                    };
-
-                    // 切换到结果页面
-                    processingSection.classList.add('hidden');
-                    resultSection.classList.remove('hidden');
-                }, 500);
-
-            } catch (error) {
-                console.error('处理文件出错：', error);
-                alert(`处理文件时发生错误：${error.message}\n请尝试重新上传或使用其他文件`);
-                restart();
-            }
-        }
-
-        // 读取文件
-        function readFileAsync(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(e);
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        // Word转PDF（简化版，复杂格式可能需要调整）
-        async function convertWordToPdf(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        const content = new Uint8Array(e.target.result);
-                        const zip = new PizZip(content);
-                        
-                        // 尝试读取Word文件
-                        let doc;
-                        try {
-                            doc = new window.docxtemplater();
-                            doc.loadZip(zip);
-                        } catch (error) {
-                            reject(new Error('Word文件格式不正确或已损坏'));
-                            return;
-                        }
-
-                        // 这里是简化的转换逻辑，实际复杂Word需要更完善的处理
-                        // 实际项目中建议使用更专业的转换库或服务
-                        const text = doc.getFullText();
-                        
-                        // 创建PDF
-                        (async () => {
-                            const pdfDoc = await PDFDocument.create();
-                            const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                            
-                            // 简单分页处理（按字符长度分页）
-                            const pageSize = 500;
-                            const pages = [];
-                            for (let i = 0; i < text.length; i += pageSize) {
-                                pages.push(text.substring(i, i + pageSize));
-                            }
-                            
-                            // 添加A4页面
-                            pages.forEach(pageText => {
-                                const page = pdfDoc.addPage([595.28, 841.89]); // A4尺寸
-                                page.drawText(pageText, {
-                                    x: 50,
-                                    y: 800,
-                                    font: helveticaFont,
-                                    size: 12,
-                                    color: rgb(0, 0, 0)
-                                });
-                            });
-                            
-                            const pdfBytes = await pdfDoc.save();
-                            resolve(pdfBytes);
-                        })();
-                        
-                    } catch (error) {
-                        reject(new Error('Word转PDF失败：' + error.message));
-                    }
-                };
-                
-                reader.onerror = function() {
-                    reject(new Error('读取Word文件失败'));
-                };
-                
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        // Excel转PDF（简化版）
-        async function convertExcelToPdf(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        
-                        // 创建PDF
-                        (async () => {
-                            const pdfDoc = await PDFDocument.create();
-                            const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                            
-                            // 处理每个工作表
-                            for (const sheetName of workbook.SheetNames) {
-                                const worksheet = workbook.Sheets[sheetName];
-                                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                                
-                                // 创建A4页面
-                                const page = pdfDoc.addPage([595.28, 841.89]);
-                                
-                                // 绘制工作表名称
-                                page.drawText(`工作表：${sheetName}`, {
-                                    x: 50,
-                                    y: 800,
-                                    font: helveticaFont,
-                                    size: 14,
-                                    color: rgb(0, 0, 0)
-                                });
-                                
-                                // 绘制表格数据
-                                let yPos = 770;
-                                const rowHeight = 20;
-                                
-                                jsonData.forEach(row => {
-                                    if (yPos < 50) return; // 超出页面范围
-                                    
-                                    let xPos = 50;
-                                    const colWidth = 80;
-                                    
-                                    row.forEach(cell => {
-                                        const text = cell !== undefined ? String(cell) : '';
-                                        page.drawText(text, {
-                                            x: xPos,
-                                            y: yPos,
-                                            font: helveticaFont,
-                                            size: 10,
-                                            color: rgb(0, 0, 0)
-                                        });
-                                        xPos += colWidth;
-                                    });
-                                    
-                                    yPos -= rowHeight;
-                                });
-                            }
-                            
-                            const pdfBytes = await pdfDoc.save();
-                            resolve(pdfBytes);
-                        })();
-                        
-                    } catch (error) {
-                        reject(new Error('Excel转PDF失败：' + error.message));
-                    }
-                };
-                
-                reader.onerror = function() {
-                    reject(new Error('读取Excel文件失败'));
-                };
-                
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        // 调整PDF为A4尺寸
-        async function adjustToA4Size(pdfDoc) {
-            const a4Width = 595.28; // A4宽度（点）
-            const a4Height = 841.89; // A4高度（点）
-            
-            const newPdfDoc = await PDFDocument.create();
-            const pages = await newPdfDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
-            
-            pages.forEach(page => {
-                // 获取原页面尺寸
-                const [originalWidth, originalHeight] = page.getSize();
-                
-                // 计算缩放比例，保持纵横比
-                const scaleX = a4Width / originalWidth;
-                const scaleY = a4Height / originalHeight;
-                const scale = Math.min(scaleX, scaleY);
-                
-                // 缩放页面内容
-                page.setScale(scale);
-                
-                // 重新设置页面尺寸为A4
-                page.setSize(a4Width, a4Height);
-                
-                newPdfDoc.addPage(page);
-            });
-            
-            return newPdfDoc;
-        }
-
-        // 更新进度条
-        function updateProgress(percent) {
-            progressBar.style.width = `${percent}%`;
-        }
-
-        // 下载文件
-        function downloadFile(type) {
-            const { file1, file2 } = window.pdfData;
-            let pdfBytes, fileName;
-            const baseName = originalFileName.replace(/\.[^/.]+$/, "");
-
-            if (type === 1) {
-                pdfBytes = file1;
-                fileName = `${baseName}_正面打印.pdf`;
+        // 上传区域点击/拖拽事件
+        uploadArea.addEventListener('click', () => pdfFile.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#409eff';
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#ccc';
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            if (e.dataTransfer.files[0] && e.dataTransfer.files[0].type === 'application/pdf') {
+                pdfFile.files = e.dataTransfer.files;
+                handlePdfUpload();
             } else {
-                pdfBytes = file2;
-                fileName = `${baseName}_反面打印.pdf`;
+                alert('请上传有效的PDF文件！');
             }
+        });
+        // 文件选择事件
+        pdfFile.addEventListener('change', handlePdfUpload);
 
-            // 创建下载链接
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-            saveAs(blob, fileName);
+        // 处理PDF上传
+        async function handlePdfUpload() {
+            if (!pdfFile.files.length) return;
+            const file = pdfFile.files[0];
+            const fileReader = new FileReader();
+
+            fileReader.onload = async (e) => {
+                try {
+                    // 解析PDF
+                    const typedArray = new Uint8Array(e.target.result);
+                    pdfDoc = await pdfjsLib.getDocument(typedArray).promise;
+                    totalPages = pdfDoc.numPages;
+                    pageDatas.length = 0; // 清空旧数据
+
+                    // 渲染预览+收集每一页数据（A4尺寸）
+                    previewArea.style.display = 'block';
+                    await renderPdfPage(1); // 预览第一页
+                    await collectAllPageDatas(); // 收集所有页的Canvas数据
+
+                    // 启用按钮
+                    createOddPdf.disabled = false;
+                    createEvenPdf.disabled = false;
+                    alert(`PDF解析成功，共${totalPages}页！`);
+                } catch (err) {
+                    alert('PDF解析失败，请检查文件是否损坏！');
+                    console.error(err);
+                }
+            };
+            fileReader.readAsArrayBuffer(file);
         }
 
-        // 重新开始
-        function restart() {
-            // 重置状态
-            fileInput.value = '';
-            fileInfo.classList.add('hidden');
-            progressBar.style.width = '0%';
-            
-            // 切换页面
-            resultSection.classList.add('hidden');
-            processingSection.classList.add('hidden');
-            uploadSection.classList.remove('hidden');
-            
-            // 清除全局数据
-            window.pdfData = null;
-            pdfDoc = null;
+        // 渲染单页PDF（预览用，A4适配）
+        async function renderPdfPage(pageNum) {
+            const page = await pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.5 }); // 缩放1.5倍，预览更清晰
+            const ctx = pdfPreview.getContext('2d');
+            pdfPreview.width = viewport.width;
+            pdfPreview.height = viewport.height;
+            await page.render({ canvasContext: ctx, viewport }).promise;
         }
 
-        // 启动应用
-        document.addEventListener('DOMContentLoaded', init);
+        // 收集所有页的Canvas数据（A4尺寸，打印适配）
+        async function collectAllPageDatas() {
+            for (let i = 1; i <= totalPages; i++) {
+                const page = await pdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale: 2.0 }); // 高缩放保证打印清晰度
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                // 将Canvas转为图片数据，存入数组（索引0对应第1页，以此类推）
+                pageDatas.push(canvas.toDataURL('image/png'));
+            }
+        }
+
+        // 生成奇数页PDF（1、3、5…）
+        createOddPdf.addEventListener('click', () => {
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'px',
+                format: 'a4' // 强制A4格式
+            });
+            // 遍历奇数页（pageDatas索引=页码-1，奇数页：1、3→索引0、2…）
+            for (let i = 0; i < pageDatas.length; i += 2) {
+                if (i > 0) pdf.addPage('a4', 'portrait'); // 非第一页添加新页
+                pdf.addImage(pageDatas[i], 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+            }
+            pdf.save('奇数页_1_3_5.pdf');
+        });
+
+        // 生成倒序偶数页PDF（6、4、2…）
+        createEvenPdf.addEventListener('click', () => {
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'px',
+                format: 'a4'
+            });
+            // 提取偶数页（页码2、4→索引1、3…），再反转
+            const evenPages = pageDatas.filter((_, index) => (index + 1) % 2 === 0).reverse();
+            // 无偶数页时提示
+            if (evenPages.length === 0) {
+                alert('该PDF无偶数页！');
+                return;
+            }
+            // 生成PDF
+            evenPages.forEach((page, index) => {
+                if (index > 0) pdf.addPage('a4', 'portrait');
+                pdf.addImage(page, 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+            });
+            pdf.save('倒序偶数页_6_4_2.pdf');
+        });
     </script>
 </body>
 </html>
+
