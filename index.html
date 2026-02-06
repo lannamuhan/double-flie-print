@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF双面打印拆分工具</title>
+    <title>PDF双面打印拆分工具（优化版）</title>
     <style>
         * {
             margin: 0;
@@ -96,38 +96,32 @@
             font-size: 14px;
         }
     </style>
-    <!-- 引入依赖库（CDN离线可用，无需联网） -->
     <script src="https://cdn.bootcdn.net/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>PDF双面打印拆分工具</h1>
-        <!-- 上传PDF区域 -->
+        <h1>PDF双面打印拆分工具（优化版）</h1>
         <div class="upload-area" id="uploadArea">
             <input type="file" id="pdfFile" accept=".pdf" />
             <div class="upload-tip">点击/拖拽上传PDF文件（自动按A4分页）</div>
         </div>
-        <!-- 操作按钮 -->
         <div class="btn-group">
             <button class="btn-odd" id="createOddPdf" disabled>生成【奇数页】PDF（1、3、5…）</button>
             <button class="btn-even" id="createEvenPdf" disabled>生成【倒序偶数页】PDF（6、4、2…）</button>
         </div>
-        <!-- PDF预览 -->
         <div class="preview" id="previewArea">
             <h3>文件预览</h3>
             <canvas class="pdf-preview" id="pdfPreview"></canvas>
         </div>
-        <p class="tip">使用说明：生成两个PDF后，先打印奇数页PDF（正面），再将打印纸翻面放入打印机，打印倒序偶数页PDF（背面），实现完美双面打印</p>
+        <p class="tip">使用说明：生成两个PDF后，先打印奇数页PDF（正面），再将打印纸翻面放入打印机，打印倒序偶数页PDF（背面）</p>
     </div>
 
     <script>
-        // 初始化配置
         const pdfjsLib = window['pdfjs-dist/build/pdf'];
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.bootcdn.net/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
         const { jsPDF } = window.jspdf;
 
-        // 获取DOM元素
         const uploadArea = document.getElementById('uploadArea');
         const pdfFile = document.getElementById('pdfFile');
         const createOddPdf = document.getElementById('createOddPdf');
@@ -135,31 +129,22 @@
         const previewArea = document.getElementById('previewArea');
         const pdfPreview = document.getElementById('pdfPreview');
 
-        // 全局变量存储PDF数据
-        let pdfDoc = null; // PDF文档实例
-        let totalPages = 0; // 总页数
-        const pageDatas = []; // 存储每一页的Canvas数据
+        let pdfDoc = null;
+        let totalPages = 0;
+        const pageDatas = [];
 
-        // 上传区域点击/拖拽事件
+        // 上传交互
         uploadArea.addEventListener('click', () => pdfFile.click());
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#409eff';
-        });
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.style.borderColor = '#ccc';
-        });
+        uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = '#409eff'; });
+        uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = '#ccc'; });
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.style.borderColor = '#ccc';
-            if (e.dataTransfer.files[0] && e.dataTransfer.files[0].type === 'application/pdf') {
+            if (e.dataTransfer.files[0]?.type === 'application/pdf') {
                 pdfFile.files = e.dataTransfer.files;
                 handlePdfUpload();
-            } else {
-                alert('请上传有效的PDF文件！');
-            }
+            } else alert('请上传有效的PDF文件！');
         });
-        // 文件选择事件
         pdfFile.addEventListener('change', handlePdfUpload);
 
         // 处理PDF上传
@@ -170,91 +155,73 @@
 
             fileReader.onload = async (e) => {
                 try {
-                    // 解析PDF
                     const typedArray = new Uint8Array(e.target.result);
                     pdfDoc = await pdfjsLib.getDocument(typedArray).promise;
                     totalPages = pdfDoc.numPages;
-                    pageDatas.length = 0; // 清空旧数据
+                    pageDatas.length = 0;
 
-                    // 渲染预览+收集每一页数据（A4尺寸）
                     previewArea.style.display = 'block';
-                    await renderPdfPage(1); // 预览第一页
-                    await collectAllPageDatas(); // 收集所有页的Canvas数据
+                    await renderPdfPage(1);
+                    await collectAllPageDatas();
 
-                    // 启用按钮
                     createOddPdf.disabled = false;
                     createEvenPdf.disabled = false;
                     alert(`PDF解析成功，共${totalPages}页！`);
                 } catch (err) {
-                    alert('PDF解析失败，请检查文件是否损坏！');
+                    alert('PDF解析失败，请检查文件！');
                     console.error(err);
                 }
             };
             fileReader.readAsArrayBuffer(file);
         }
 
-        // 渲染单页PDF（预览用，A4适配）
+        // 渲染预览页
         async function renderPdfPage(pageNum) {
             const page = await pdfDoc.getPage(pageNum);
-            const viewport = page.getViewport({ scale: 1.5 }); // 缩放1.5倍，预览更清晰
+            const viewport = page.getViewport({ scale: 1.2 }); // 预览缩放降低
             const ctx = pdfPreview.getContext('2d');
             pdfPreview.width = viewport.width;
             pdfPreview.height = viewport.height;
             await page.render({ canvasContext: ctx, viewport }).promise;
         }
 
-        // 收集所有页的Canvas数据（A4尺寸，打印适配）
+        // 【核心优化1】降低缩放+改用JPEG压缩
         async function collectAllPageDatas() {
             for (let i = 1; i <= totalPages; i++) {
                 const page = await pdfDoc.getPage(i);
-                const viewport = page.getViewport({ scale: 2.0 }); // 高缩放保证打印清晰度
+                const viewport = page.getViewport({ scale: 1.0 }); // 从2.0降到1.0，平衡清晰度与体积
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 await page.render({ canvasContext: ctx, viewport }).promise;
-                // 将Canvas转为图片数据，存入数组（索引0对应第1页，以此类推）
-                pageDatas.push(canvas.toDataURL('image/png'));
+                // 【核心优化2】转JPEG，质量0.8（0-1，越高越清晰、体积越大）
+                pageDatas.push(canvas.toDataURL('image/jpeg', 0.8));
             }
         }
 
-        // 生成奇数页PDF（1、3、5…）
+        // 生成奇数页PDF
         createOddPdf.addEventListener('click', () => {
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'px',
-                format: 'a4' // 强制A4格式
-            });
-            // 遍历奇数页（pageDatas索引=页码-1，奇数页：1、3→索引0、2…）
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
             for (let i = 0; i < pageDatas.length; i += 2) {
-                if (i > 0) pdf.addPage('a4', 'portrait'); // 非第一页添加新页
-                pdf.addImage(pageDatas[i], 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+                if (i > 0) pdf.addPage('a4', 'portrait');
+                // 【核心优化3】嵌入JPEG图片
+                pdf.addImage(pageDatas[i], 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
             }
             pdf.save('奇数页_1_3_5.pdf');
         });
 
-        // 生成倒序偶数页PDF（6、4、2…）
+        // 生成倒序偶数页PDF
         createEvenPdf.addEventListener('click', () => {
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'px',
-                format: 'a4'
-            });
-            // 提取偶数页（页码2、4→索引1、3…），再反转
-            const evenPages = pageDatas.filter((_, index) => (index + 1) % 2 === 0).reverse();
-            // 无偶数页时提示
-            if (evenPages.length === 0) {
-                alert('该PDF无偶数页！');
-                return;
-            }
-            // 生成PDF
-            evenPages.forEach((page, index) => {
-                if (index > 0) pdf.addPage('a4', 'portrait');
-                pdf.addImage(page, 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' });
+            const evenPages = pageDatas.filter((_, idx) => (idx+1)%2===0).reverse();
+            if (evenPages.length === 0) { alert('该PDF无偶数页！'); return; }
+            evenPages.forEach((page, idx) => {
+                if (idx > 0) pdf.addPage('a4', 'portrait');
+                pdf.addImage(page, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
             });
             pdf.save('倒序偶数页_6_4_2.pdf');
         });
     </script>
 </body>
 </html>
-
